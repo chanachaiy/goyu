@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบรายงานสรุปการลงทะเบียนเรียน 2569</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Sarabun', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+
+    <!-- Header -->
+    <header class="bg-indigo-700 text-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div>
+                <h1 class="text-2xl sm:text-3xl font-bold">รายงานสรุปการลงทะเบียนเรียน</h1>
+                <p class="text-indigo-200 text-sm mt-1">ระบบตรวจสอบข้อมูลรายวิชาและหน่วยกิตนักศึกษา</p>
+            </div>
+            <button onclick="loadData()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm transition font-medium flex items-center gap-2 border border-indigo-400">
+                🔄 รีเฟรชข้อมูล
+            </button>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+        
+        <!-- Dashboard Summary Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4">
+                <div class="bg-indigo-100 text-indigo-600 p-4 rounded-xl text-2xl">👨‍🎓</div>
+                <div>
+                    <p class="text-sm font-medium text-slate-500">จำนวนนักศึกษาทั้งหมด</p>
+                    <p id="totalStudents" class="text-2xl font-bold text-slate-800">0 คน</p>
+                </div>
+            </div>
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4">
+                <div class="bg-emerald-100 text-emerald-600 p-4 rounded-xl text-2xl">📘</div>
+                <div>
+                    <p class="text-sm font-medium text-slate-500">เฉลี่ยวิชาบังคับ</p>
+                    <p id="avgCompulsory" class="text-2xl font-bold text-slate-800">0</p>
+                </div>
+            </div>
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4">
+                <div class="bg-amber-100 text-amber-600 p-4 rounded-xl text-2xl">📙</div>
+                <div>
+                    <p class="text-sm font-medium text-slate-500">เฉลี่ยวิชาเลือก</p>
+                    <p id="avgElective" class="text-2xl font-bold text-slate-800">0</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search Box -->
+        <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 mb-6">
+            <div class="relative">
+                <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="🔍 ค้นหาด้วย รหัสนักศึกษา หรือ ชื่อ-นามสกุล..." 
+                    class="w-full pl-4 pr-10 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-700">
+            </div>
+        </div>
+
+        <!-- Table Container -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm text-left text-slate-600">
+                    <thead class="text-xs text-slate-700 uppercase bg-slate-100 border-b border-slate-200">
+                        <tr id="tableHeader">
+                            <!-- Headers generated dynamically -->
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody" class="divide-y divide-slate-100">
+                        <!-- Data rows generated dynamically -->
+                    </tbody>
+                </table>
+            </div>
+            <div id="noData" class="hidden p-8 text-center text-slate-400">ไม่พบข้อมูลที่ตรงกับการค้นหา</div>
+        </div>
+    </main>
+
+    <script>
+        // -------------------------------------------------------------
+        // หากต้องการดึงข้อมูลสดจาก Google Sheets ให้ใส่ CSV URL ที่เผยแพร่แล้วตรงนี้
+        // ตัวอย่าง: const GOOGLE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/.../pub?output=csv";
+        // -------------------------------------------------------------
+        const GOOGLE_SHEET_CSV_URL = "";
+
+        // ข้อมูลสำรองตั้งต้นจาก Google Sheet ของคุณ
+        const defaultData = [
+            {"ที่":1,"รหัสนักศึกษา":"6813001786","ชื่อ - นามสกุล":"นายศุภกิตติ์  สีลาขาว","ทช31002":"*","พค31001":"*","สค31001":"*","อช31002":"*","สค0200035":"*","สค0200036":"*","สค0200037":"*","สค0200038":"*","วิชาบังคับ":14,"วิชาเลือก":8},
+            {"ที่":2,"รหัสนักศึกษา":"6823001792","ชื่อ - นามสกุล":"นางสาวณกฤตตรา  ลินโพธิ์ศาล","ทช31002":"*","พค31001":"*","สค31001":"*","อช31002":"*","สค0200035":"*","สค0200036":"*","สค0200037":"*","สค0200038":"*","วิชาบังคับ":14,"วิชาเลือก":8},
+            {"ที่":3,"รหัสนักศึกษา":"45556654","ชื่อ - นามสกุล":"ชนะชัย  ยางสวาสดื์","ทช31002":"✓","พค31001":"✓","สค31001":"✓","อช31002":"✓","สค0200035":"✓","สค0200036":"✓","สค0200037":"✓","สค0200038":"✓","วิชาบังคับ":14,"วิชาเลือก":8},
+            {"ที่":4,"รหัสนักศึกษา":"cvbcvb","ชื่อ - นามสกุล":"cvbcb","ทช31002":"✓","พค31001":"✓","สค31001":"✓","อช31002":"✓","สค0200035":"✓","สค0200036":"✓","สค0200037":"✓","สค0200038":"✓","วิชาบังคับ":14,"วิชาเลือก":8},
+            {"ที่":5,"รหัสนักศึกษา":"6913000401","ชื่อ - นามสกุล":"นายรัชพล  ศรีโยธา","ทช31002":"*","พค31001":"*","สค31001":"*","อช31002":"*","สค0200035":"*","สค0200036":"*","สค0200037":"*","สค0200038":"*","วิชาบังคับ":14,"วิชาเลือก":8},
+            {"ที่":6,"รหัสนักศึกษา":"6913002254","ชื่อ - นามสกุล":"นายคำมัย  เศษวิสัย","ทช31002":"*","พค31001":"*","สค31001":"*","อช31002":"*","สค0200035":"*","สค0200036":"*","สค0200037":"*","สค0200038":"*","วิชาบังคับ":14,"วิชาเลือก":8},
+            {"ที่":7,"รหัสนักศึกษา":"6913002320","ชื่อ - นามสกุล":"นายอดิศักดิ์  เสมเหลา","ทช31002":"*","พค31001":"*","สค31001":"*","อช31002":"*","สค0200035":"*","สค0200036":"*","สค0200037":"*","สค0200038":"*","วิชาบังคับ":14,"วิชาเลือก":8},
+            {"ที่":8,"รหัสนักศึกษา":"6913002366","ชื่อ - นามสกุล":"นายภานุพงษ์  เสียงเย็น","ทช31002":"*","พค31001":"*","สค31001":"*","อช31002":"*","สค0200035":"*","สค0200036":"*","สค0200037":"*","สค0200038":"*","วิชาบังคับ":14,"วิชาเลือก":8},
+            {"ที่":9,"รหัสนักศึกษา":"6913002375","ชื่อ - นามสกุล":"นางสาวศรุตา  สอนไตรแก้ว","ทช31002":"*","พค31001":"*","สค31001":"*","อช31002":"*","สค0200035":"*","สค0200036":"*","สค0200037":"*","สค0200038":"*","วิชาบังคับ":14,"วิชาเลือก":8},
+            {"ที่":10,"รหัสนักศึกษา":"6913002384","ชื่อ - นามสกุล":"นายธนันธร  พุดสอยดาว","ทช31002":"*","พค31001":"*","สค31001":"*","อช31002":"*","สค0200035":"*","สค0200036":"*","สค0200037":"*","สค0200038":"*","วิชาบังคับ":14,"วิชาเลือก":8},
+            {"ที่":11,"รหัสนักศึกษา":"6913002450","ชื่อ - นามสกุล":"นางสาวสุดารัตน์  อ่อนนอก","ทช31002":"*","พค31001":"*","สค31001":"*","อช31002":"*","สค0200035":"*","สค0200036":"*","สค0200037":"*","สค0200038":"*","วิชาบังคับ":14,"วิชาเลือก":8},
+            {"ที่":12,"รหัสนักศึกษา":"6913002455","ชื่อ - นามสกุล":"นางสาวสุดารัตน์  อ่อน","ทช31002":"*","พค31001":"*","สค31001":"*","อช31002":"*","สค0200035":"*","สค0200036":"*","สค0200037":"*","สค0200038":"*","วิชาบังคับ":14,"วิชาเลือก":8},
+            {"ที่":13,"รหัสนักศึกษา":"cxvxcv","ชื่อ - นามสกุล":"xcvxcvxcv","ทช31002":"✓","พค31001":"✓","สค31001":"✓","อช31002":"✓","สค0200035":"✓","สค0200036":"✓","สค0200037":"✓","สค0200038":"✓","วิชาบังคับ":14,"วิชาเลือก":8}
+        ];
+
+        let currentData = [];
+
+        function loadData() {
+            if (GOOGLE_SHEET_CSV_URL && GOOGLE_SHEET_CSV_URL.trim() !== "") {
+                Papa.parse(GOOGLE_SHEET_CSV_URL, {
+                    download: true,
+                    header: true,
+                    skipEmptyLines: true,
+                    complete: function(results) {
+                        currentData = results.data;
+                        renderApp(currentData);
+                    },
+                    error: function() {
+                        console.warn("ไม่สามารถดึงข้อมูลจาก URL ได้ ใช้ข้อมูลสำรอง");
+                        currentData = defaultData;
+                        renderApp(currentData);
+                    }
+                });
+            } else {
+                currentData = defaultData;
+                renderApp(currentData);
+            }
+        }
+
+        function renderApp(data) {
+            if (!data || data.length === 0) return;
+
+            // Render Dashboard Stats
+            document.getElementById('totalStudents').innerText = `${data.length} คน`;
+            const totalComp = data.reduce((acc, cur) => acc + (parseFloat(cur['วิชาบังคับ']) || 0), 0);
+            const totalElec = data.reduce((acc, cur) => acc + (parseFloat(cur['วิชาเลือก']) || 0), 0);
+            document.getElementById('avgCompulsory').innerText = (totalComp / data.length).toFixed(1);
+            document.getElementById('avgElective').innerText = (totalElec / data.length).toFixed(1);
+
+            // Render Table Header
+            const headers = Object.keys(data[0]);
+            const headerRow = document.getElementById('tableHeader');
+            headerRow.innerHTML = headers.map(h => `<th scope="col" class="px-4 py-3 whitespace-nowrap">${h.trim()}</th>`).join('');
+
+            // Render Table Body
+            renderRows(data, headers);
+        }
+
+        function renderRows(data, headers) {
+            const tableBody = document.getElementById('tableBody');
+            const noData = document.getElementById('noData');
+
+            if (data.length === 0) {
+                tableBody.innerHTML = '';
+                noData.classList.remove('hidden');
+                return;
+            }
+
+            noData.classList.add('hidden');
+            tableBody.innerHTML = data.map(row => {
+                return `<tr class="hover:bg-indigo-50/50 transition">` +
+                    headers.map(h => {
+                        const val = (row[h] || '').toString().trim();
+                        let badgeClass = '';
+                        if (val === '✓') badgeClass = 'text-emerald-600 font-bold text-base';
+                        else if (val === '*') badgeClass = 'text-indigo-500 font-semibold';
+                        
+                        return `<td class="px-4 py-3 border-b border-slate-100 whitespace-nowrap ${badgeClass}">${val}</td>`;
+                    }).join('') +
+                `</tr>`;
+            }).join('');
+        }
+
+        function filterTable() {
+            const query = document.getElementById('searchInput').value.toLowerCase().trim();
+            const headers = Object.keys(currentData[0]);
+            const filtered = currentData.filter(row => {
+                const id = (row['รหัสนักศึกษา'] || '').toString().toLowerCase();
+                const name = (row['ชื่อ - นามสกุล'] || '').toString().toLowerCase();
+                return id.includes(query) || name.includes(query);
+            });
+            renderRows(filtered, headers);
+        }
+
+        window.onload = loadData;
+    </script>
+</body>
+</html>
